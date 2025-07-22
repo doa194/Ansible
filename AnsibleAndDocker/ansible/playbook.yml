@@ -1,0 +1,79 @@
+# This playbook installs Docker and Docker Compose on an EC2 instance and starts a Docker container using a docker-compose.yml file. 
+
+# It assumes that the EC2 instance is running Ubuntu 22.04. The playbook also ensures that the Docker service is running and that the user 'ubuntu' is added to the Docker group to allow running Docker commands without sudo.
+
+# The playbook uses the Ansible apt module to manage packages and the pip module to install Docker Compose. It also uses the Ansible copy module to transfer the docker-compose.yml file to the EC2 instance.
+
+# The playbook is designed to be run with elevated privileges (become: yes) to ensure that all tasks can be executed successfully.
+---
+- name: Configuring an EC2 instance with Docker and Docker Compose
+  hosts: devops
+  become: yes
+
+  tasks:
+    - name: Updating apt cache
+      apt:
+        update_cache: yes
+
+    - name: Installing required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: yes
+
+    - name: Install pip for python3
+      apt:
+        name: python3-pip
+        state: present
+
+    - name: Install Docker Compose via pip
+      pip:
+        name: docker-compose
+
+    - name: Ensure docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Copy docker-compose.yml to server
+      copy:
+        src: files/docker-compose.yml
+        dest: /home/ubuntu/docker-compose.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Start Docker containers with docker-compose
+      become: yes
+      become_user: ubuntu
+      shell: |
+        cd /home/ubuntu
+        docker-compose up -d
+      args:
+        creates: /home/ubuntu/docker-compose.yml
